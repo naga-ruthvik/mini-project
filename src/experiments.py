@@ -211,12 +211,24 @@ def run_experiment(train_df, val_df, test_df, config, writer, device, fold, tria
                 f"Using {config['scheduler']} scheduler with {config['scheduler_kwargs']}\n"
             )
     if not config["skip_training"]:
+        import numpy as np
+        from sklearn.utils.class_weight import compute_class_weight
+
+        train_labels = train_df["diagnosis"].values
+        class_weights = compute_class_weight(
+            "balanced", classes=np.unique(train_labels), y=train_labels
+        )
+        class_weights_tensor = torch.tensor(class_weights, dtype=torch.float32).to(
+            device
+        )
+        print(f"\nApplying Class Weights to Loss Function: {class_weights}\n")
+
         results = engine.train(
             model=model,
             train_dataloader=train_dataloader,
             val_dataloader=val_dataloader,
             num_classes=num_classes,
-            loss_fn=nn.CrossEntropyLoss(),
+            loss_fn=nn.CrossEntropyLoss(weight=class_weights_tensor),
             optimizer=optimizer,
             scheduler=scheduler,
             warmup_scheduler=warmup_scheduler,

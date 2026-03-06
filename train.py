@@ -2,14 +2,14 @@
 # Copyright (c) 2024 Gabriele Lozupone (University of Cassino and Southern Lazio).
 # All rights reserved.
 # --------------------------------------------------------------------------------
-# 
+#
 # LICENSE NOTICE
 # *************************************************************************************************************
 # By downloading/using/running/editing/changing any portion of codes in this package you agree to the license.
 # If you do not agree to this license, do not download/use/run/edit/change this code.
 # Refer to the LICENSE file in the root directory of this repository for full details.
 # *************************************************************************************************************
-# 
+#
 # Contact: Gabriele Lozupone at gabriele.lozupone@unicas.it
 # -----------------------------------------------------------------------------
 from datetime import datetime
@@ -33,41 +33,55 @@ def main():
     # Get the timestamp for the experiment
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
     # Load the yaml config file
-    config = load_config('config.yaml')
+    config = load_config("config.yaml")
     # Get the device to use
-    device = get_device(cuda_idx=config['cuda_device'])
+    device = get_device(cuda_idx=config["cuda_device"])
     # Get the dataframes and subjects based on the classification task
-    df, subjects = load_dataframe(config['dataset_csv'], config['task'])
+    df, subjects = load_dataframe(config["dataset_csv"], config["task"])
     # Print information about the subjects (number of subjects, number of subjects with each diagnosis)
     print(f"Number of subjects: {len(subjects)}")
-    # Define k-fold cross validation
-    kf = KFold(n_splits=config['k_folds'],
-               shuffle=True,
-               random_state=config['random_seed'])
+    # Define k-fold cross validation or single split
+    from sklearn.model_selection import train_test_split
+
+    if config["k_folds"] <= 1:
+        train_idx, test_idx = train_test_split(
+            np.arange(len(subjects)), test_size=0.2, random_state=config["random_seed"]
+        )
+        splits = [(train_idx, test_idx)]
+    else:
+        kf = KFold(
+            n_splits=config["k_folds"], shuffle=True, random_state=config["random_seed"]
+        )
+        splits = kf.split(subjects)
+
     # Create lists to store the metrics for each fold
     fold_metrics = []
     all_y_true = torch.tensor([])
     all_y_pred = torch.tensor([])
     # Perform cross-validation on the dataset based on the subjects
-    for train_val_subj_index, test_subj_index in kf.split(subjects):
-        print(f"\n\n ----------------------- Fold {len(fold_metrics) + 1} ----------------------- \n\n")
+    for train_val_subj_index, test_subj_index in splits:
+        print(
+            f"\n\n ----------------------- Fold {len(fold_metrics) + 1} ----------------------- \n\n"
+        )
         # Split the dataset in train, val and test by subject
-        train_df, val_df, test_df = train_val_test_subject_split(df=df,
-                                                                 train_val_subj=subjects[train_val_subj_index],
-                                                                 test_subj=subjects[test_subj_index],
-                                                                 val_perc_split=config['val_perc_split'],
-                                                                 random_seed=config['random_seed'])
+        train_df, val_df, test_df = train_val_test_subject_split(
+            df=df,
+            train_val_subj=subjects[train_val_subj_index],
+            test_subj=subjects[test_subj_index],
+            val_perc_split=config["val_perc_split"],
+            random_seed=config["random_seed"],
+        )
         # Set seeds for reproducibility
-        set_seeds(config['random_seed'])
+        set_seeds(config["random_seed"])
         # Instantiate the tensorboard writer for this fold
         writer = create_writer(
             config=config,
             fold_num=len(fold_metrics) + 1,
             timestamp=timestamp,
-            extra=config["extra"]
+            extra=config["extra"],
         )
         # Run the experiment
-        if config['network_3D'] == 'AwareNet' and config['image_type'] == '3D':
+        if config["network_3D"] == "AwareNet" and config["image_type"] == "3D":
             y_true, y_pred, test_metrics = run_aware_experiment(
                 train_df=train_df,
                 val_df=val_df,
@@ -75,7 +89,7 @@ def main():
                 config=config,
                 writer=writer,
                 device=device,
-                fold=len(fold_metrics) + 1
+                fold=len(fold_metrics) + 1,
             )
         else:
             y_true, y_pred, test_metrics = experiments.run_experiment(
@@ -85,7 +99,7 @@ def main():
                 config=config,
                 writer=writer,
                 device=device,
-                fold=len(fold_metrics) + 1
+                fold=len(fold_metrics) + 1,
             )
         # Concatenate the true and predicted labels for each fold
         all_y_true = torch.cat((all_y_true, y_true), dim=0)
@@ -97,8 +111,8 @@ def main():
         for metric in fold_metrics[0]  # Assuming all dictionaries have the same keys
     }
     # Save the fold results in json format with indent 4
-    if config['skip_training']:
-        with open(os.path.join(config['experiment_folder'], "results.json"), "w") as f:
+    if config["skip_training"]:
+        with open(os.path.join(config["experiment_folder"], "results.json"), "w") as f:
             json.dump(fold_metrics, f, indent=4)
     else:
         with open(os.path.join(writer.get_logdir(), "../", "results.json"), "w") as f:
@@ -108,17 +122,23 @@ def main():
     for metric, mean_value in mean_metrics.items():
         print(f"Mean {metric}: {mean_value}")
     # Compute the overall metrics
-    overall_metrics = compute_metrics(y_true=all_y_true, y_pred=all_y_pred, num_classes=len(config['task']))
+    overall_metrics = compute_metrics(
+        y_true=all_y_true, y_pred=all_y_pred, num_classes=len(config["task"])
+    )
     # Save the overall metrics in json format with indent 4
-    if config['skip_training']:
-        with open(os.path.join(config['experiment_folder'], "overall_metrics.json"), "w") as f:
+    if config["skip_training"]:
+        with open(
+            os.path.join(config["experiment_folder"], "overall_metrics.json"), "w"
+        ) as f:
             json.dump(overall_metrics, f, indent=4)
     else:
-        with open(os.path.join(writer.get_logdir(), "../", "overall_metrics.json"), "w") as f:
+        with open(
+            os.path.join(writer.get_logdir(), "../", "overall_metrics.json"), "w"
+        ) as f:
             json.dump(overall_metrics, f, indent=4)
     # Save the config in json format with indent 4
-    if config['skip_training']:
-        with open(os.path.join(config['experiment_folder'], "config.json"), "w") as f:
+    if config["skip_training"]:
+        with open(os.path.join(config["experiment_folder"], "config.json"), "w") as f:
             json.dump(config, f, indent=4)
     else:
         with open(os.path.join(writer.get_logdir(), "../", "config.json"), "w") as f:

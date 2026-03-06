@@ -26,12 +26,8 @@ import pandas as pd
 
 # === CONFIGURATION ===
 # Add paths to all your OASIS disc folders here
-DISC_DIRS = [
-    os.path.join("oasis_cross-sectional_disc1", "disc1"),
-    os.path.join("oasis_cross-sectional_disc2", "disc2"),
-    # Add more discs here if you download them later:
-    # os.path.join("oasis_cross-sectional_disc3", "disc3"),
-]
+OASIS_ROOT = r"C:\Users\konde\main-projects\datasets\OASIS\OASIS_1"
+DISC_DIRS = [os.path.join(OASIS_ROOT, f"disc{i}") for i in range(1, 13)]
 
 # Output directory for converted NIfTI files
 OUTPUT_DIR = os.path.join("data", "oasis1_nifti")
@@ -49,9 +45,7 @@ def cdr_to_diagnosis(cdr_value):
     cdr = float(cdr_value)
     if cdr == 0:
         return "CN"
-    elif cdr == 0.5:
-        return "MCI"
-    else:  # CDR >= 1
+    else:  # CDR > 0 (includes 0.5 MCI and >=1 AD)
         return "AD"
 
 
@@ -104,7 +98,11 @@ def main():
     skipped = []
 
     for disc_dir in DISC_DIRS:
-        disc_path = os.path.join(project_root, disc_dir)
+        if os.path.isabs(disc_dir):
+            disc_path = disc_dir
+        else:
+            disc_path = os.path.join(project_root, disc_dir)
+
         if not os.path.exists(disc_path):
             print(f"WARNING: Disc directory not found: {disc_path}")
             continue
