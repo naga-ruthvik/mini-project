@@ -31,12 +31,13 @@ freeze_percentage: 0.5 # Percentage of the base to be frozen
 num_heads: 4 # Number of heads for the multi-head attention
 num_trans_blocks: 3 # Number of layers for the transformer
 forward_expansion: 4 # Forward expansion for the transformer
+attn_dropout: 0.1 # Dropout for the attention layers
 # ------------------------------------------------------------
 
 task: ['CN', 'AD'] # Defines the classes to be considered for the classification
-dataset_name: 'ADNI'
-dataset_csv: 'data/adni_dataset.csv'
-num_workers: 2 # Number of workers for the data loader
+dataset_name: 'OASIS1'
+dataset_csv: 'data/oasis1_nifti/dataset.csv'
+num_workers: 4 # Number of workers for the data loader
 
 load_pretrained_model: False # If True, the pretrained model is loaded. The model path is specified in
                              # pretrained_model_path. Is common practice to save the model with the name 2D_{backbone}.pth
@@ -44,29 +45,28 @@ load_pretrained_model: False # If True, the pretrained model is loaded. The mode
 pretrained_model_path: 'models/AwareNet_ADvsCN.pth' # Path to the pretrained model
 
 # ----------------------- Hyperparameters -----------------------
-num_epochs: 5 # Number of epochs
-batch_size: 2 # Batch size
+num_epochs: 10 # Number of epochs
+batch_size: 4 # Batch size
 dropout: 0.3 # Dropout probability
-k_folds: 5 # If <= 1, no k-fold cross validation
+k_folds: 1 # If <= 1, no k-fold cross validation. Set to 1 for MAXIMUM SPEED (cuts hardware time by 5x)
 val_perc_split: 0.2 # The percentage of the training set to be used for validation
-num_slices: 80 # Number of slices to be considered for each MRI volume starting from the center in specified slicing plane
+num_slices: 40 # Number of slices to be considered for each MRI volume starting from the center in specified slicing plane
 slicing_plane: axial # axial, coronal, sagittal
-learning_rate: 0.01 # Learning rate
+learning_rate: 0.0001 # Learning rate
 weight_decay: 0.0001 # Weight decay
-freeze_first_percentage: 0.5 # Percentage of the backbone to be frozen
+freeze_first_percentage: 0.3 # Percentage of the backbone to be frozen
 optimizer: AdamW # Adam, AdamW, SGD, Lion
 optimizer_kwargs: # Optimizer parameters
     # betas: [0.5, 0.999]
     # momentum: 0.0009
     # amsgrad: False
     # nesterov: True
-scheduler: None # ReduceLROnPlateau, CosineAnnealingLR, CosineAnnealingWarmRestarts, StepLR. If None, no scheduler is used
+scheduler: ReduceLROnPlateau # ReduceLROnPlateau, CosineAnnealingLR, CosineAnnealingWarmRestarts, StepLR. If None, no scheduler is used
 scheduler_kwargs: # Scheduler parameters
-    # T_max: 100
-    # T_0: 10
-    # T_mult: 2
-    # eta_min: 0.0001
-    # verbose: True
+    mode: 'min'  # Monitor validation loss
+    factor: 0.5  # Halve the learning rate
+    patience: 3  # If loss doesn't improve for 3 epochs, reduce LR
+    verbose: True
 warmup_scheduler: None # LinearWarmup, ExponentialWarmup, None
 warmup_kwargs: # Warmup parameters
     # warmup_period: 15
@@ -95,12 +95,6 @@ data_augmentation:
           isotropic: true
           translation: [-1, 1, -1, 1, 0, 0]
         probability: 0.1
-      - transformation: RandomElasticDeformation
-        parameters:
-          num_control_points: 10
-          locked_borders: 2
-          max_displacement: 5
-        probability: 0.3
       - transformation: RandomBiasField
         parameters:
           coefficients: [0.1, 0.3]
